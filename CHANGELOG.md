@@ -9,6 +9,9 @@
 ### Fixed
 - **Summary length** — The cached summary may use the model's output limit, reduced so the conversation and the summary fit the window, like Pi's own compaction. It was capped at 80% of `compaction.reserveTokens` (about 13k tokens), too short for large sessions. With less than 16k tokens of room, the cached path is skipped instead of attempted.
 
+### Changed
+- **Labeled cache countdown** — The footer reads `cache 59m … cache 0:25`, then `cache cold`, instead of `⏱ 59m`, so it is not mistaken for elapsed time or a countdown to compaction. During a request it reads `cache in use` instead of disappearing, so the footer no longer changes shape between turns.
+
 ## [0.2.0] - 2026-10-23
 
 ### Highlights
