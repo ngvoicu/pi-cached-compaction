@@ -79,6 +79,7 @@ jq -c 'select(.event == "compact") | {at, trigger, outcome, reason, cacheRead: .
 | Compact earlier or later on big models | change "Compact when the context is" (`compactAtPercent`) |
 | Stop compacting before the cache expires | `"compactBeforeExpiry": false` in [Settings](#settings) |
 | Compact before expiry only on bigger sessions | raise `minContextTokens` |
+| Keep the cache warm through a long break | "Keep the cache warm when idle" (`keepWarmMinutes`), see [Keeping the cache warm](#keeping-the-cache-warm) |
 | Keep Pi's 5-minute cache and its 1.25× writes on Anthropic | `"cacheRetention": "short"` |
 | Get the countdown for GPT on opencode-go | `/cached-compaction cache-flag` (see [Providers](#providers)) |
 | Get the countdown on another model | declare a lifetime with Pi's `modelOverrides.promptCache` |
@@ -92,7 +93,8 @@ Run `/cached-compaction-settings` (or `/cached-compaction settings`) to change t
 |---|---|---|
 | `compactAtPercent` | `90` | after a turn, compact once the context fills this share of the model's window; `0` turns it off |
 | `compactBeforeExpiry` | `true` | compact 20 s before the cache expires, when idle |
-| `minContextTokens` | `140000` | the smallest context worth compacting before expiry |
+| `minContextTokens` | `140000` | the smallest context worth keeping warm or compacting before expiry |
+| `keepWarmMinutes` | `0` | keep the cache warm for this many minutes after Pi goes idle; `0` turns it off |
 | `cacheRetention` | `"long"` | ask for the longer cache in interactive sessions (2× writes on Anthropic and Kimi); `"short"` keeps Pi's default |
 
 ```json
@@ -125,6 +127,21 @@ Otherwise it does nothing and the cache cools. Models without a [countdown](#wha
 The threshold is in tokens rather than percent because rewriting an expired cache costs in proportion to its size, and on 1M-token models a percentage would almost never trigger.
 
 **The longer cache.** A 5-minute cache expires during most breaks, so in interactive sessions the extension asks for the longer one (`PI_CACHE_RETENTION=long`) unless you've set that variable yourself. That's 1 hour instead of 5 minutes on Anthropic and Kimi K3, and a 12-hour shared system prompt on GPT-5.6 and later (see [Providers](#providers)). It isn't free: writing a 1-hour cache costs 2× the input price, instead of 1.25× on Anthropic and 1× on Kimi, though reads cost the same. Headless runs (`pi -p`, JSON mode, subagent processes) keep the short cache, since nobody pauses there. The choice is made once per session, because moving a cache up a tier means writing all of it again.
+
+## Keeping the cache warm
+
+Pi can keep an idle cache warm itself (`cacheWarming: "idle"`), but only until 30 minutes after the last request started, and only when it expects the refresh to pay for itself. Its refresh comes at 90% of the lifetime, so a 1-hour cache (54 minutes) is never refreshed while idle. Set `keepWarmMinutes` to choose how long after Pi goes idle the cache should stay warm, for example `120` for two hours.
+
+3 minutes before a 1-hour cache expires (25 seconds before a 5-minute one, after Pi's own refresh would have run), the extension re-sends the last request exactly as it was sent with a one-token answer, the way Pi's warming does. The provider reads the cache entry and its lifetime starts again. It does this while the cache would otherwise expire inside the window, so a 1-hour cache in a 2-hour window is refreshed about twice. When the window ends, the cache is left to expire, and [compacting before expiry](#compacting-before-the-cache-expires) takes over as before. It only refreshes when:
+
+- Pi is idle with nothing queued,
+- the context holds at least `minContextTokens`,
+- the cached path is available (the same check as compacting from the cache),
+- and the request doesn't use Claude's budget-based thinking, which keys the cache on the output limit. Adaptive thinking is fine.
+
+Each refresh reads the whole context from the cache: about a tenth of the input price on Anthropic. In one measured session, a refresh of a 692k-token Claude context cost $0.14, against about $6.90 to write it again at that model's cache-write price. On a subscription it is free but counts toward your usage. If a refresh fails, or reads less than 90% from the cache (the route behind a proxy may not cache), refreshing stops until your next message, and Pi shows a warning. A new message cancels a refresh in flight. Refreshes are listed in `/cached-compaction` and the log, and the footer shows `cache warm · refreshing` while one runs.
+
+Pi's footer totals don't include these refreshes, since an extension can't add usage to the session; the log has their cost. After a restart, the countdown doesn't know about refreshes sent before it, so it may show the cache as cold early.
 
 ## Providers
 

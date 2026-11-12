@@ -68,9 +68,21 @@ export interface FullTrace {
 	percent: number;
 }
 
-export type TraceEvent = CompactTrace | ResultTrace | FailedTrace | ExpiryTrace | FullTrace;
+export interface WarmTrace {
+	event: "warm";
+	/** "warm": the cache was refreshed; "missed": the refresh wrote the cache again instead of reading it. */
+	action: "warm" | "missed" | "failed" | "skip";
+	reason?: string;
+	secondsLeft: number;
+	contextTokens?: number;
+	idleMinutes?: number;
+	seconds?: number;
+	usage?: TraceUsage;
+}
+
+export type TraceEvent = CompactTrace | ResultTrace | FailedTrace | ExpiryTrace | FullTrace | WarmTrace;
 export type TraceRecord = TraceEvent & { at: string; session: string };
-const TRACE_EVENTS = new Set<string>(["compact", "result", "failed", "expiry", "full"] satisfies TraceEvent["event"][]);
+const TRACE_EVENTS = new Set<string>(["compact", "result", "failed", "expiry", "full", "warm"] satisfies TraceEvent["event"][]);
 
 export function appendTrace(record: TraceRecord): void {
 	try {
@@ -179,6 +191,14 @@ export function describeTrace(record: TraceRecord): string {
 			return record.action === "compact"
 				? `${time} cache expires in ${record.secondsLeft}s: compacting ${formatTokens(record.contextTokens ?? 0)} tokens`
 				: `${time} cache expires in ${record.secondsLeft}s: not compacting, ${record.reason}`;
+		case "warm": {
+			const idle = record.idleMinutes === undefined ? "" : `, idle ${record.idleMinutes} min`;
+			const used = record.usage ? `: ${cacheShare(record.usage)}, ${formatCost(record.usage.cost)}` : "";
+			if (record.action === "warm") return `${time} kept the cache warm${idle}${used}`;
+			if (record.action === "missed") return `${time} keeping the cache warm missed the cache${idle}${used}; stopped until your next message`;
+			if (record.action === "failed") return `${time} keeping the cache warm failed: ${record.reason}`;
+			return `${time} cache expires in ${record.secondsLeft}s: not keeping it warm, ${record.reason}`;
+		}
 		case "full": {
 			const where = `context at ${formatTokens(record.contextTokens)}, past ${record.percent}% (${formatTokens(record.threshold)})`;
 			return record.action === "compact" ? `${time} ${where}: compacting` : `${time} ${where}: not compacting, ${record.reason}`;

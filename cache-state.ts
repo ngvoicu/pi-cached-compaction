@@ -20,7 +20,11 @@ export interface CacheState {
 	replied: boolean;
 }
 
-export function cacheState(model: Model<Api>, entries: SessionEntry[]): CacheState {
+/**
+ * `warmedAt` is when this extension last re-sent the cached request to keep it warm. Pi's own refreshes are
+ * `cache_warm` usage entries; the extension's are kept in memory, because an extension cannot add usage entries.
+ */
+export function cacheState(model: Model<Api>, entries: SessionEntry[], warmedAt?: number): CacheState {
 	let refreshedAt: number | undefined;
 	let reported: "short" | "long" | undefined;
 	let replied = false;
@@ -39,6 +43,8 @@ export function cacheState(model: Model<Api>, entries: SessionEntry[]): CacheSta
 			refreshedAt = Math.max(refreshedAt, Date.parse(entry.timestamp));
 		}
 	}
+	// A refresh before the latest real request (or before a compaction, which leaves refreshedAt unset) is stale.
+	if (refreshedAt !== undefined && warmedAt !== undefined) refreshedAt = Math.max(refreshedAt, warmedAt);
 	const declared = model.promptCache?.[reported ?? (process.env.PI_CACHE_RETENTION === "long" ? "long" : "short")];
 	let lifetime: CacheState["lifetime"];
 	if (declared !== undefined) lifetime = { ms: declared * 1000, source: "declared by the model" };

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { comparison, describeTrace, formatCacheStatus, formatRemaining, type CompactTrace, type TraceUsage } from "../trace.ts";
+import { comparison, describeTrace, type TraceRecord, formatCacheStatus, formatRemaining, type CompactTrace, type TraceUsage } from "../trace.ts";
 
 const cached = (usage: Partial<TraceUsage>, piEstimate: CompactTrace["piEstimate"]): CompactTrace => ({
 	event: "compact",
@@ -41,4 +41,14 @@ test("the footer labels the countdown as the cache's, and the /cached-compaction
 	assert.equal(formatCacheStatus(-5_000), "cache cold · next message full price");
 	assert.equal(formatRemaining(29 * 60_000), "29m");
 	assert.equal(formatRemaining(25_000), "0:25");
+});
+
+test("the log describes keeping the cache warm", () => {
+	const at = "2026-11-12T10:00:00.000Z";
+	const time = new Date(at).toLocaleTimeString([], { hourCycle: "h23", hour: "2-digit", minute: "2-digit", second: "2-digit" });
+	const base = { event: "warm" as const, secondsLeft: 180, contextTokens: 692_000, idleMinutes: 57, at, session: "s" };
+	const usage = { input: 2, cacheRead: 692_000, cacheWrite: 0, output: 1, cost: 0.144 };
+	assert.equal(describeTrace({ ...base, action: "warm", usage } as TraceRecord), `${time} kept the cache warm, idle 57 min: 99% of 692k from cache, 1 out, $0.14`);
+	assert.equal(describeTrace({ ...base, action: "failed", reason: "overloaded" } as TraceRecord), `${time} keeping the cache warm failed: overloaded`);
+	assert.equal(describeTrace({ ...base, action: "skip", reason: "Pi is busy or has queued messages" } as TraceRecord), `${time} cache expires in 180s: not keeping it warm, Pi is busy or has queued messages`);
 });
