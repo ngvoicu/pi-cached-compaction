@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { comparison, describeTrace, type CompactTrace, type TraceUsage } from "../trace.ts";
+import { comparison, describeTrace, formatCacheStatus, formatRemaining, type CompactTrace, type TraceUsage } from "../trace.ts";
 
 const cached = (usage: Partial<TraceUsage>, piEstimate: CompactTrace["piEstimate"]): CompactTrace => ({
 	event: "compact",
@@ -31,4 +31,15 @@ test("the log describes compacting when full", () => {
 	assert.equal(describeTrace({ ...base, action: "compact" }), `${time} context at 905k, past 90% (900k): compacting`);
 	assert.equal(describeTrace({ ...base, action: "skip", reason: "Pi is busy or has queued messages" }), `${time} context at 905k, past 90% (900k): not compacting, Pi is busy or has queued messages`);
 	assert.equal(describeTrace({ ...base, contextTokens: 412_000, threshold: 400_000, tokens: 400_000, action: "compact" }), `${time} context at 412k, past the 400k-token cap: compacting`);
+});
+
+test("the footer labels the countdown as the cache's, and the /cached-compaction line keeps the bare time", () => {
+	assert.equal(formatCacheStatus(59 * 60_000), "cache warm · 59m left");
+	assert.equal(formatCacheStatus(120_000), "cache warm · 2m left");
+	assert.equal(formatCacheStatus(25_000), "cache warm · 0:25 left");
+	assert.equal(formatCacheStatus(400), "cache warm · 0:01 left");
+	assert.equal(formatCacheStatus(0), "cache cold · next message full price");
+	assert.equal(formatCacheStatus(-5_000), "cache cold · next message full price");
+	assert.equal(formatRemaining(29 * 60_000), "29m");
+	assert.equal(formatRemaining(25_000), "0:25");
 });
