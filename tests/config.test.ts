@@ -42,7 +42,7 @@ test("settings: compacting when full is on at 90% by default, takes a whole perc
 		}
 		writeFileSync(settings, JSON.stringify({ theme: "dark", compaction: { enabled: true }, cachedCompaction: { minContextTokens: 200_000 } }));
 		const saved = saveConfig({ compactAtPercent: 80, cacheRetention: "short" });
-		assert.deepEqual(saved, { cacheRetention: "short", compactBeforeExpiry: true, minContextTokens: 200_000, compactAtPercent: 80, keepWarmMinutes: 0 });
+		assert.deepEqual(saved, { cacheRetention: "short", compactBeforeExpiry: true, minContextTokens: 200_000, compactAtPercent: 80 });
 		assert.deepEqual(JSON.parse(readFileSync(settings, "utf8")), {
 			theme: "dark",
 			compaction: { enabled: true },
@@ -68,25 +68,4 @@ test("a summary may use the model's output limit, reduced so prompt and summary 
 	assert.equal(fullThreshold({ contextWindow: 272_000, maxTokens: 128_000 }, 85), 231_200);
 	assert.equal(fullThreshold(opus, 0), undefined);
 	assert.equal(fullThreshold({ contextWindow: 0, maxTokens: 128_000 }, 90), undefined);
-});
-
-test("settings: keeping the cache warm is off by default and takes whole minutes up to a day", () => {
-	const dir = mkdtempSync(join(tmpdir(), "pcc-config-"));
-	const settings = join(dir, "settings.json");
-	process.env.PI_CODING_AGENT_DIR = dir;
-	try {
-		assert.equal(loadConfig().keepWarmMinutes, 0);
-		writeFileSync(settings, JSON.stringify({ cachedCompaction: { keepWarmMinutes: 120 } }));
-		assert.equal(loadConfig().keepWarmMinutes, 120);
-		for (const bad of [-1, 1441, 1.5, "60", true]) {
-			writeFileSync(settings, JSON.stringify({ cachedCompaction: { keepWarmMinutes: bad } }));
-			assert.throws(loadConfig, /keepWarmMinutes .* whole number of minutes/);
-		}
-		writeFileSync(settings, JSON.stringify({ cachedCompaction: { minContextTokens: 200_000 } }));
-		assert.equal(saveConfig({ keepWarmMinutes: 60 }).keepWarmMinutes, 60);
-		assert.deepEqual(JSON.parse(readFileSync(settings, "utf8")).cachedCompaction, { minContextTokens: 200_000, keepWarmMinutes: 60 });
-	} finally {
-		delete process.env.PI_CODING_AGENT_DIR;
-		rmSync(dir, { recursive: true });
-	}
 });

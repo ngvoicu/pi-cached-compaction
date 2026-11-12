@@ -4,7 +4,6 @@
 
 ### Added
 - **Compact when the context is full** — After a turn, once the context fills `compactAtPercent` of the model's window (90% by default), the session compacts from the warm cache while a summary still fits beside the conversation. Before, a 1M-token session reached Pi's own threshold with about 16k tokens left, the cached summary hit its output limit, and Pi's compaction ran at full price ($4.20 instead of about $0.45 on a 984k-token Opus session).
-- **Keep the cache warm when idle** — `keepWarmMinutes` (off by default) keeps the prompt cache warm for that long after Pi goes idle: shortly before it expires, the last request is re-sent exactly as sent with a one-token answer, as Pi's own warming does. Pi's warming stops 30 minutes after the last request and never refreshes a 1-hour cache while idle. A refresh that fails or misses the cache stops warming until the next message. When the window ends, compacting before expiry takes over.
 - **`/cached-compaction-settings`** (also `/cached-compaction settings`) — A menu for every setting (compact when full, compact before expiry and from what size, cache retention). Changes are saved to `cachedCompaction` in `~/.pi/agent/settings.json` and apply right away. `/cached-compaction` shows the "when full" mark for the current model.
 
 ### Fixed

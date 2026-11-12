@@ -60,13 +60,3 @@ test("Kimi K3 on Moonshot's API caches for 5 minutes, or 1 hour when Pi asks for
 		else process.env.PI_CACHE_RETENTION = before;
 	}
 });
-
-test("a refresh this extension sent moves the expiry like Pi's own, but not past a newer request or across a compaction", () => {
-	const declared = { ...claude, promptCache: { short: 3600, long: 3600 } } as Model<Api>;
-	const cached = reply("a", 1_000, { cacheRead: 500 });
-
-	assert.equal(cacheState(declared, [cached], 3_000_000).expiresAt, 6_600_000);
-	assert.equal(cacheState(declared, [cached], 500).expiresAt, 3_601_000, "a refresh older than the latest request changes nothing");
-	assert.equal(cacheState(declared, [cached, compaction], 3_000_000).expiresAt, undefined);
-	assert.equal(cacheState(declared, [reply("a", 1_000, {})], 3_000_000).expiresAt, undefined, "an uncached request has nothing to keep warm");
-});
